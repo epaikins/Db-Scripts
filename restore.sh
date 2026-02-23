@@ -38,6 +38,7 @@ if [[ -f "$RESTORE_DIR/metadata" ]]; then
     --user="$TARGET_USER" \
     --password="$TARGET_PASSWORD" \
     --directory="$RESTORE_DIR" \
+    --database="$TARGET_DATABASE" \
     --threads="$RESTORE_THREADS" \
     --overwrite-tables \
     --verbose=2
