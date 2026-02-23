@@ -6,11 +6,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Load config
+# Load config (safe for passwords with special characters)
 if [[ -f config.env ]]; then
-  set -a
-  source config.env
-  set +a
+  source "$SCRIPT_DIR/load-config.sh"
+  load_config_env "$SCRIPT_DIR/config.env"
 fi
 
 PARALLEL_JOBS="${PARALLEL_JOBS:-16}"

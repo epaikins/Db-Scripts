@@ -10,9 +10,8 @@ MODE="${1:-full}"   # full | backup-only | restore-only
 BACKUP_PATH="${2:-}"  # for restore-only: path to backup dir (local or after transfer)
 
 if [[ -f config.env ]]; then
-  set -a
-  source config.env
-  set +a
+  source "$SCRIPT_DIR/load-config.sh"
+  load_config_env "$SCRIPT_DIR/config.env"
 else
   echo "Create config.env from config.example.env"
   exit 1

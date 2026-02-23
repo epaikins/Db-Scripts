@@ -162,3 +162,4 @@ The pipeline runs with a 90-minute timeout, writes a temporary `config.env` from
 
 - Do **not** commit `config.env` (passwords). Add `config.env` to `.gitignore`.
 - Prefer MySQL users with minimal required privileges; use SSL for connections if possible.
+- **Passwords with special characters** (e.g. parentheses, `$`, quotes) are supported: config is loaded safely. Use `SOURCE_PASSWORD=my(pass)word` or wrap in single quotes: `SOURCE_PASSWORD='my(pass)word'`.
