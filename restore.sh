@@ -13,6 +13,8 @@ if [[ -f config.env ]]; then
 fi
 
 PARALLEL_JOBS="${PARALLEL_JOBS:-16}"
+# Use RESTORE_THREADS for myloader if set (e.g. 1 or 2 to avoid Trace/breakpoint trap crash)
+RESTORE_THREADS="${RESTORE_THREADS:-$PARALLEL_JOBS}"
 RESTORE_DIR="${1:-}"
 
 if [[ -z "$RESTORE_DIR" || ! -d "$RESTORE_DIR" ]]; then
@@ -36,7 +38,7 @@ if [[ -f "$RESTORE_DIR/metadata" ]]; then
     --user="$TARGET_USER" \
     --password="$TARGET_PASSWORD" \
     --directory="$RESTORE_DIR" \
-    --threads="$PARALLEL_JOBS" \
+    --threads="$RESTORE_THREADS" \
     --overwrite-tables \
     --verbose=2
   echo "[$(date -Iseconds)] myloader finished."

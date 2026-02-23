@@ -45,7 +45,8 @@ pipeline {
     string(name: 'S3_PREFIX', defaultValue: 'mysql-backups', description: 'S3 key prefix when S3_BUCKET is set')
     string(name: 'AWS_REGION', defaultValue: 'us-east-1', description: 'AWS region for S3')
     string(name: 'AWS_CREDENTIAL_ID', defaultValue: '', description: 'Optional: Jenkins AWS credential ID for S3 (required if S3_BUCKET is set)')
-    string(name: 'PARALLEL_JOBS', defaultValue: '16', description: 'Parallel threads (mydumper/myloader)')
+    string(name: 'PARALLEL_JOBS', defaultValue: '16', description: 'Parallel threads (backup)')
+    string(name: 'RESTORE_THREADS', defaultValue: '', description: 'Optional: myloader threads (default PARALLEL_JOBS; use 1 or 2 if myloader crashes)')
     string(name: 'CHUNK_SIZE_MB', defaultValue: '64', description: 'Chunk size in MB for mydumper')
     choice(name: 'COMPRESS', choices: ['1', '0'], description: 'Compress backup (1=yes)')
     choice(name: 'BACKUP_TOOL', choices: ['mydumper', 'mysqldump'], description: 'Backup tool preference')
@@ -91,6 +92,7 @@ S3_BUCKET=${params.S3_BUCKET}
 S3_PREFIX=${params.S3_PREFIX}
 AWS_REGION=${params.AWS_REGION}
 PARALLEL_JOBS=${params.PARALLEL_JOBS}
+RESTORE_THREADS=${params.RESTORE_THREADS}
 CHUNK_SIZE_MB=${params.CHUNK_SIZE_MB}
 COMPRESS=${params.COMPRESS}
 BACKUP_TOOL=${params.BACKUP_TOOL}
