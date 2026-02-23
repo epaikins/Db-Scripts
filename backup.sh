@@ -41,7 +41,7 @@ if command -v mydumper &>/dev/null && [[ "$BACKUP_TOOL" == mydumper ]]; then
     --threads="$PARALLEL_JOBS" \
     --chunk-filesize=$((CHUNK_SIZE_MB)) \
     $COMPRESS_ARG \
-    --trx-consistency-only \
+    --trx-tables \
     --verbose=2
   echo "[$(date -Iseconds)] mydumper finished. Metadata in $OUT_DIR/metadata"
 else
