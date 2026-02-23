@@ -42,6 +42,7 @@ if command -v mydumper &>/dev/null && [[ "$BACKUP_TOOL" == mydumper ]]; then
     --chunk-filesize=$((CHUNK_SIZE_MB)) \
     $COMPRESS_ARG \
     --trx-tables \
+    --long-query-guard=7200 \
     --verbose=2
   echo "[$(date -Iseconds)] mydumper finished. Metadata in $OUT_DIR/metadata"
 else
