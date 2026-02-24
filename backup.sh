@@ -6,12 +6,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Config: CONFIG_FILE env, or first argument, or default config.env
+CONFIG_FILE="${CONFIG_FILE:-${1:-config.env}}"
+[[ "$CONFIG_FILE" != /* ]] && CONFIG_FILE="$SCRIPT_DIR/$CONFIG_FILE"
+
 # Load config (safe for passwords with special characters)
-if [[ -f config.env ]]; then
+if [[ -f "$CONFIG_FILE" ]]; then
   source "$SCRIPT_DIR/load-config.sh"
-  load_config_env "$SCRIPT_DIR/config.env"
+  load_config_env "$CONFIG_FILE"
 else
-  echo "Create config.env from config.example.env and set SOURCE_* and BACKUP_DIR."
+  echo "Config not found: $CONFIG_FILE — create from config.example.env and set SOURCE_* and BACKUP_DIR."
   exit 1
 fi
 
@@ -65,15 +69,18 @@ fi
 
 echo "[$(date -Iseconds)] Backup complete: $OUT_DIR"
 
-# Push to S3 if configured
+# Push to S3 if configured: bucket / YYYYMMDD / folder / db_timestamp.tar.gz (folder defaults to "upt")
 if [[ -n "${S3_BUCKET:-}" ]]; then
   if ! command -v aws &>/dev/null; then
     echo "Warning: aws CLI not found; skipping S3 upload."
   else
-    S3_PREFIX="${S3_PREFIX:-mysql-backups}"
-    S3_URI="s3://${S3_BUCKET}/${S3_PREFIX}/$(basename "$OUT_DIR")/"
-    echo "[$(date -Iseconds)] Uploading to $S3_URI ..."
-    aws s3 sync "$OUT_DIR" "$S3_URI" ${AWS_REGION:+--region "$AWS_REGION"} --only-show-errors
+    DATE_PREFIX=$(date +%Y%m%d)
+    S3_FOLDER="${S3_PREFIX:-upt}"
+    ARCHIVE_NAME="${SOURCE_DATABASE:-db}_${STAMP}.tar.gz"
+    # Path: s3://bucket/YYYYMMDD/upt/db_timestamp.tar.gz (all DB backups under date/upt/)
+    S3_URI="s3://${S3_BUCKET}/${DATE_PREFIX}/${S3_FOLDER}/${ARCHIVE_NAME}"
+    echo "[$(date -Iseconds)] Creating and uploading $ARCHIVE_NAME to $S3_URI ..."
+    tar -czf - -C "$BACKUP_DIR" "$(basename "$OUT_DIR")" | aws s3 cp - "$S3_URI" ${AWS_REGION:+--region "$AWS_REGION"} --only-show-errors
     echo "[$(date -Iseconds)] S3 upload complete. S3_PATH=$S3_URI"
   fi
 fi

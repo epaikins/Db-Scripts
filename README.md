@@ -25,7 +25,7 @@ Workflow to **backup** a large MySQL database and **restore** it on another serv
    ```bash
    ./workflow.sh backup-only                    # creates ./backups/<db>_<timestamp>; if S3_BUCKET set, pushes to S3
    ./workflow.sh restore-only ./backups/db_20250223_120000   # local path
-   ./workflow.sh restore-only s3://my-bucket/mysql-backups/db_20250223_120000   # fetch from S3 then restore
+   ./workflow.sh restore-only s3://upt-database-backup/20260223/upt/mydb_20260223_000001.tar.gz   # fetch from S3 then restore
    ```
 
 ## Why this can finish in under 1 hour
@@ -93,15 +93,17 @@ The restore script already sets `foreign_key_checks=0` and `unique_checks=0` for
 Set in `config.env`:
 
 ```bash
-S3_BUCKET=my-backup-bucket
-S3_PREFIX=mysql-backups
+S3_BUCKET=upt-database-backup
+S3_PREFIX=upt                       # folder under date; all DB backups go in bucket/YYYYMMDD/upt/
 AWS_REGION=us-east-1
 ```
 
-- **Backup**: After each backup, the script runs `aws s3 sync` to upload the backup directory to `s3://<S3_BUCKET>/<S3_PREFIX>/<db>_<timestamp>/`. Requires **AWS CLI** and credentials (env vars, `~/.aws/credentials`, or IAM role).
-- **Restore**: Use a full S3 URI as the backup path. The workflow downloads from S3 to a temporary directory, then restores:
+Backups are stored as **bucket/YYYYMMDD/folder/db_timestamp.tar.gz**. The folder under the date defaults to `upt` (set via `S3_PREFIX`), so all DB objects go under e.g. `s3://upt-database-backup/20260223/upt/`.
+
+- **Backup**: The script creates a gzipped tarball (`<db>_<timestamp>.tar.gz`) and streams it to S3. Requires **AWS CLI** and credentials.
+- **Restore**: Use the full S3 URI of the archive. The workflow downloads it, extracts, then restores:
   ```bash
-  ./workflow.sh restore-only s3://my-bucket/mysql-backups/mydb_20250223_120000
+  ./workflow.sh restore-only s3://upt-database-backup/20260223/upt/mydb_20260223_000001.tar.gz
   ```
 
 ## Optional: transfer backup to target host
@@ -126,15 +128,54 @@ For **same MySQL version** and InnoDB-only (or compatible) setups, physical back
 
 Restore requires stopping MySQL, then `xtrabackup --copy-back` (or rsync) and fixing ownership. See script comments.
 
+## Midnight cron: multiple DBs on different servers → S3
+
+To run a backup every night for **multiple databases on different servers** and push to **S3**:
+
+1. **Create one config per server/DB** in `configs/`:
+   ```bash
+   cp configs/example-server.env.example configs/prod-app1.env
+   cp configs/example-server.env.example configs/prod-app2.env
+   # Edit each: SOURCE_HOST, SOURCE_*, S3_BUCKET (e.g. upt-database-backup), etc.
+   ```
+   Each config must have `SOURCE_*` and `S3_BUCKET` set. Backups go to `s3://<bucket>/YYYYMMDD/upt/<db>_<timestamp>.tar.gz`.
+
+2. **Install AWS CLI** and ensure credentials are available (env vars, `~/.aws/credentials`, or IAM role).
+
+3. **Run all backups** (manual or from cron):
+   ```bash
+   ./cron-backup-all.sh
+   # or: make backup-all
+   ```
+   This runs `backup.sh` once per `configs/*.env`; each backup is uploaded to `s3://<bucket>/YYYYMMDD/upt/<db>_<timestamp>.tar.gz`.
+
+4. **Schedule at midnight** (e.g. on the machine that can reach all MySQL servers and S3):
+   ```bash
+   crontab -e
+   ```
+   Add:
+   ```cron
+   0 0 * * * /path/to/db-scripts/cron-backup-all.sh >> /var/log/mysql-cron-backup.log 2>&1
+   ```
+   Or with `make`:
+   ```cron
+   0 0 * * * cd /path/to/db-scripts && make cron-backup >> /var/log/mysql-cron-backup.log 2>&1
+   ```
+
+If any config fails, the script reports which one(s) and exits non-zero so cron can alert.
+
 ## File layout
 
 ```
 db-scripts/
 ├── config.example.env   # copy to config.env
 ├── config.env           # your settings (git-ignore this)
-├── backup.sh            # backup (mydumper or mysqldump)
+├── configs/             # multi-DB cron: one .env per server/DB
+│   └── example-server.env.example
+├── backup.sh            # backup (mydumper or mysqldump); accepts CONFIG_FILE or config path
 ├── restore.sh           # restore (myloader or mysql)
 ├── workflow.sh          # full | backup-only | restore-only
+├── cron-backup-all.sh   # run backup for every configs/*.env, push to S3
 ├── backup-xtrabackup.sh # optional physical backup
 ├── restore-xtrabackup.sh
 ├── Jenkinsfile          # Jenkins pipeline

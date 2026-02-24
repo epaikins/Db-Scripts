@@ -27,7 +27,7 @@ case "$MODE" in
   restore-only)
     if [[ -z "$BACKUP_PATH" ]]; then
       echo "Usage: $0 restore-only <backup_directory_or_s3_uri>"
-      echo "  e.g. ./backups/mydb_20250223_120000  or  s3://bucket/prefix/mydb_20250223_120000"
+      echo "  e.g. ./backups/mydb_20250223_120000  or  s3://bucket/prefix/mydb_20250223_120000.tar.gz"
       exit 1
     fi
     echo "=== Restore only ==="
@@ -39,9 +39,20 @@ case "$MODE" in
       fi
       DOWNLOAD_DIR="${BACKUP_DIR:-./backups}/restore_from_s3_$$"
       mkdir -p "$DOWNLOAD_DIR"
-      echo "[$(date -Iseconds)] Downloading from S3: $BACKUP_PATH -> $DOWNLOAD_DIR"
-      aws s3 sync "$BACKUP_PATH" "$DOWNLOAD_DIR" ${AWS_REGION:+--region "$AWS_REGION"} --only-show-errors
-      RESTORE_DIR="$DOWNLOAD_DIR"
+      if [[ "$BACKUP_PATH" == *.tar.gz ]]; then
+        echo "[$(date -Iseconds)] Downloading archive from S3: $BACKUP_PATH"
+        aws s3 cp "$BACKUP_PATH" "$DOWNLOAD_DIR/backup.tar.gz" ${AWS_REGION:+--region "$AWS_REGION"} --only-show-errors
+        echo "[$(date -Iseconds)] Extracting..."
+        tar -xzf "$DOWNLOAD_DIR/backup.tar.gz" -C "$DOWNLOAD_DIR"
+        rm -f "$DOWNLOAD_DIR/backup.tar.gz"
+        # Archive contains one top-level dir (e.g. mydb_20250224_000000)
+        RESTORE_DIR=$(find "$DOWNLOAD_DIR" -mindepth 1 -maxdepth 1 -type d | head -1)
+        [[ -z "$RESTORE_DIR" || ! -d "$RESTORE_DIR" ]] && { echo "Error: could not find backup dir inside archive."; exit 1; }
+      else
+        echo "[$(date -Iseconds)] Downloading from S3: $BACKUP_PATH -> $DOWNLOAD_DIR"
+        aws s3 sync "$BACKUP_PATH" "$DOWNLOAD_DIR" ${AWS_REGION:+--region "$AWS_REGION"} --only-show-errors
+        RESTORE_DIR="$DOWNLOAD_DIR"
+      fi
     fi
     "$SCRIPT_DIR/restore.sh" "$RESTORE_DIR"
     [[ -n "${DOWNLOAD_DIR:-}" ]] && rm -rf "$DOWNLOAD_DIR"
