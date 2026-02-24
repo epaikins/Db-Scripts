@@ -7,7 +7,7 @@ Workflow to **backup** a large MySQL database and **restore** it on another serv
 1. **Copy config and edit**
    ```bash
    cp config.example.env config.env
-   # Set SOURCE_* (backup from) and TARGET_* (restore to), BACKUP_DIR, etc.
+   # Set SOURCE_* (backup from), TARGET_* (restore to), BACKUP_DIR, RESTORE_PATH (for restore), etc.
    ```
 
 2. **Install mydumper/myloader** (recommended for speed)
@@ -24,8 +24,9 @@ Workflow to **backup** a large MySQL database and **restore** it on another serv
 4. **Or run steps separately**
    ```bash
    ./workflow.sh backup-only                    # creates ./backups/<db>_<timestamp>; if S3_BUCKET set, pushes to S3
-   ./workflow.sh restore-only ./backups/db_20250223_120000   # local path
-   ./workflow.sh restore-only s3://upt-database-backup/20260223/upt/mydb_20260223_000001.tar.gz   # fetch from S3 then restore
+   # Restore: set RESTORE_PATH in your config (local dir or s3://...), then:
+   make restore CONFIG=config.env
+   # or: ./workflow.sh restore-only config.env
    ```
 
 ## Why this can finish in under 1 hour
@@ -101,9 +102,10 @@ AWS_REGION=us-east-1
 Backups are stored as **bucket/YYYYMMDD/folder/db_timestamp.tar.gz**. The folder under the date defaults to `upt` (set via `S3_PREFIX`), so all DB objects go under e.g. `s3://upt-database-backup/20260223/upt/`.
 
 - **Backup**: The script creates a gzipped tarball (`<db>_<timestamp>.tar.gz`) and streams it to S3. Requires **AWS CLI** and credentials.
-- **Restore**: Use the full S3 URI of the archive. The workflow downloads it, extracts, then restores:
+- **Restore**: Set `RESTORE_PATH` in your config to the full S3 URI (or local backup dir), then run restore with that config:
   ```bash
-  ./workflow.sh restore-only s3://upt-database-backup/20260223/upt/mydb_20260223_000001.tar.gz
+  # In config.env: RESTORE_PATH=s3://upt-database-backup/20260223/upt/mydb_20260223_000001.tar.gz
+  make restore CONFIG=config.env
   ```
 
 ## Optional: transfer backup to target host
@@ -193,9 +195,9 @@ A **Jenkinsfile** is provided for running backup/restore as a pipeline job.
 3. **First run**: open “Build with Parameters” and set:
    - **SOURCE_CREDENTIAL_ID** / **TARGET_CREDENTIAL_ID** to the credential IDs from step 1
    - **SOURCE_HOST**, **SOURCE_USER**, **SOURCE_DATABASE** (and target equivalents) to your servers and DB names
-   - **MODE**: `full`, `backup-only`, or `restore-only` (for `restore-only` set **BACKUP_PATH** to a local path or `s3://bucket/prefix/key`)
+   - **MODE**: `full`, `backup-only`, or `restore-only` (for `restore-only` the generated config must set **RESTORE_PATH** to a local path or `s3://bucket/prefix/key`)
    - **S3_BUCKET** (optional): after backup, push to this bucket; set **AWS_CREDENTIAL_ID** for S3 access
-   - For restore from S3, set **BACKUP_PATH** to the S3 URI and **AWS_CREDENTIAL_ID**
+   - For restore from S3, set **RESTORE_PATH** to the S3 URI in the config and **AWS_CREDENTIAL_ID**
 
 The pipeline runs with a 90-minute timeout, writes a temporary `config.env` from parameters and credentials, then runs `workflow.sh`. The job must run on an agent that has `mydumper`/`myloader` (or `mysqldump`/`mysql`), and for S3 also **aws** CLI and AWS credentials.
 

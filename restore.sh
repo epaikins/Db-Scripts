@@ -6,10 +6,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Load config (safe for passwords with special characters)
-if [[ -f config.env ]]; then
+# Config: CONFIG_FILE env, or default config.env (set by workflow.sh when using CONFIG=)
+CONFIG_FILE="${CONFIG_FILE:-$SCRIPT_DIR/config.env}"
+[[ "$CONFIG_FILE" != /* ]] && CONFIG_FILE="$SCRIPT_DIR/$CONFIG_FILE"
+if [[ -f "$CONFIG_FILE" ]]; then
   source "$SCRIPT_DIR/load-config.sh"
-  load_config_env "$SCRIPT_DIR/config.env"
+  load_config_env "$CONFIG_FILE"
+else
+  echo "Config not found: $CONFIG_FILE"
+  exit 1
 fi
 
 PARALLEL_JOBS="${PARALLEL_JOBS:-16}"

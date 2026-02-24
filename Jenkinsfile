@@ -25,9 +25,9 @@ pipeline {
       description: 'full = backup then restore; backup-only / restore-only for split runs'
     )
     string(
-      name: 'BACKUP_PATH',
+      name: 'RESTORE_PATH',
       defaultValue: '',
-      description: 'For restore-only: path to backup dir (e.g. ./backups/mydb_20250223_120000 or absolute path)'
+      description: 'For restore-only: path to backup dir or s3:// URI (written into config as RESTORE_PATH)'
     )
     string(name: 'SOURCE_HOST', defaultValue: 'source-mysql.example.com', description: 'Source MySQL host')
     string(name: 'SOURCE_PORT', defaultValue: '3306', description: 'Source MySQL port')
@@ -41,7 +41,7 @@ pipeline {
     string(name: 'TARGET_DATABASE', defaultValue: 'your_database', description: 'Target database name')
     string(name: 'BACKUP_DIR', defaultValue: './backups', description: 'Local backup output directory')
     string(name: 'REMOTE_BACKUP_PATH', defaultValue: '', description: 'Optional: user@host:/path for rsync after backup')
-    string(name: 'S3_BUCKET', defaultValue: '', description: 'Optional: S3 bucket; after backup push to S3; for restore-only use BACKUP_PATH=s3://bucket/prefix/key')
+    string(name: 'S3_BUCKET', defaultValue: '', description: 'Optional: S3 bucket; after backup push to S3; for restore-only use RESTORE_PATH=s3://bucket/prefix/key')
     string(name: 'S3_PREFIX', defaultValue: 'mysql-backups', description: 'S3 key prefix when S3_BUCKET is set')
     string(name: 'AWS_REGION', defaultValue: 'us-east-1', description: 'AWS region for S3')
     string(name: 'AWS_CREDENTIAL_ID', defaultValue: '', description: 'Optional: Jenkins AWS credential ID for S3 (required if S3_BUCKET is set)')

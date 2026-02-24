@@ -8,7 +8,7 @@ help:
 	@echo ""
 	@echo "  make config          - Copy config.example.env -> config.env (if missing)"
 	@echo "  make backup          - Backup from source MySQL only"
-	@echo "  make restore         - Restore (BACKUP_PATH=./backups/db_* or s3://bucket/prefix/db_*.tar.gz)"
+	@echo "  make restore         - Restore using config (CONFIG=config.env or configs/prod.env; config sets RESTORE_PATH)"
 	@echo "  make full            - Backup then restore (or backup + rsync if REMOTE_BACKUP_PATH set)"
 	@echo "  make backup-all      - Backup all DBs in configs/*.env and push to S3 (for cron)"
 	@echo "  make cron-backup    - Same as backup-all; use in cron at midnight"
@@ -29,9 +29,8 @@ backup: check
 	./workflow.sh backup-only
 
 restore: check
-	@test -n "$(BACKUP_PATH)" || (echo "Usage: make restore BACKUP_PATH=./backups/yourdb_20250223_120000 or BACKUP_PATH=s3://bucket/prefix/yourdb_20250223_120000.tar.gz" && exit 1)
-	@echo "$(BACKUP_PATH)" | grep -q '^s3://' || test -d "$(BACKUP_PATH)" || (echo "Local path not found: $(BACKUP_PATH)" && exit 1)
-	./workflow.sh restore-only "$(BACKUP_PATH)"
+	@test -n "$(CONFIG)" || (echo "Usage: make restore CONFIG=config.env (or configs/prod.env). Set RESTORE_PATH in that config." && exit 1)
+	./workflow.sh restore-only "$(CONFIG)"
 
 full: check
 	./workflow.sh full

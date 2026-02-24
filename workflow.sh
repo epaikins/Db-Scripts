@@ -7,14 +7,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 MODE="${1:-full}"   # full | backup-only | restore-only
-BACKUP_PATH="${2:-}"  # for restore-only: path to backup dir (local or after transfer)
+# For restore-only: config file to use (config defines RESTORE_PATH and TARGET_*)
+RESTORE_CONFIG="${2:-}"
 
-if [[ -f config.env ]]; then
-  source "$SCRIPT_DIR/load-config.sh"
-  load_config_env "$SCRIPT_DIR/config.env"
-else
-  echo "Create config.env from config.example.env"
-  exit 1
+# Load default config for backup-only and full (restore-only loads its own config below)
+if [[ "$MODE" != "restore-only" ]]; then
+  if [[ -f config.env ]]; then
+    source "$SCRIPT_DIR/load-config.sh"
+    load_config_env "$SCRIPT_DIR/config.env"
+  else
+    echo "Create config.env from config.example.env"
+    exit 1
+  fi
 fi
 
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
@@ -25,23 +29,32 @@ case "$MODE" in
     exec "$SCRIPT_DIR/backup.sh"
     ;;
   restore-only)
-    if [[ -z "$BACKUP_PATH" ]]; then
-      echo "Usage: $0 restore-only <backup_directory_or_s3_uri>"
-      echo "  e.g. ./backups/mydb_20250223_120000  or  s3://bucket/prefix/mydb_20250223_120000.tar.gz"
+    # Load the config specified for restore (contains RESTORE_PATH and TARGET_*)
+    CONFIG_FILE="${RESTORE_CONFIG:-config.env}"
+    [[ "$CONFIG_FILE" != /* ]] && CONFIG_FILE="$SCRIPT_DIR/$CONFIG_FILE"
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+      echo "Usage: $0 restore-only <config_file>"
+      echo "  Config must set RESTORE_PATH (local dir or s3://...). Example: $0 restore-only configs/prod.env"
       exit 1
     fi
-    echo "=== Restore only ==="
-    RESTORE_DIR="$BACKUP_PATH"
-    if [[ "$BACKUP_PATH" == s3://* ]]; then
+    source "$SCRIPT_DIR/load-config.sh"
+    load_config_env "$CONFIG_FILE"
+    if [[ -z "${RESTORE_PATH:-}" ]]; then
+      echo "RESTORE_PATH is not set in $CONFIG_FILE. Set it to the backup directory or s3:// URI."
+      exit 1
+    fi
+    echo "=== Restore only (config: $CONFIG_FILE) ==="
+    RESTORE_DIR="$RESTORE_PATH"
+    if [[ "$RESTORE_PATH" == s3://* ]]; then
       if ! command -v aws &>/dev/null; then
         echo "Error: aws CLI required to restore from S3."
         exit 1
       fi
       DOWNLOAD_DIR="${BACKUP_DIR:-./backups}/restore_from_s3_$$"
       mkdir -p "$DOWNLOAD_DIR"
-      if [[ "$BACKUP_PATH" == *.tar.gz ]]; then
-        echo "[$(date -Iseconds)] Downloading archive from S3: $BACKUP_PATH"
-        aws s3 cp "$BACKUP_PATH" "$DOWNLOAD_DIR/backup.tar.gz" ${AWS_REGION:+--region "$AWS_REGION"} --only-show-errors
+      if [[ "$RESTORE_PATH" == *.tar.gz ]]; then
+        echo "[$(date -Iseconds)] Downloading archive from S3: $RESTORE_PATH"
+        aws s3 cp "$RESTORE_PATH" "$DOWNLOAD_DIR/backup.tar.gz" ${AWS_REGION:+--region "$AWS_REGION"} --only-show-errors
         echo "[$(date -Iseconds)] Extracting..."
         tar -xzf "$DOWNLOAD_DIR/backup.tar.gz" -C "$DOWNLOAD_DIR"
         rm -f "$DOWNLOAD_DIR/backup.tar.gz"
@@ -49,12 +62,12 @@ case "$MODE" in
         RESTORE_DIR=$(find "$DOWNLOAD_DIR" -mindepth 1 -maxdepth 1 -type d | head -1)
         [[ -z "$RESTORE_DIR" || ! -d "$RESTORE_DIR" ]] && { echo "Error: could not find backup dir inside archive."; exit 1; }
       else
-        echo "[$(date -Iseconds)] Downloading from S3: $BACKUP_PATH -> $DOWNLOAD_DIR"
-        aws s3 sync "$BACKUP_PATH" "$DOWNLOAD_DIR" ${AWS_REGION:+--region "$AWS_REGION"} --only-show-errors
+        echo "[$(date -Iseconds)] Downloading from S3: $RESTORE_PATH -> $DOWNLOAD_DIR"
+        aws s3 sync "$RESTORE_PATH" "$DOWNLOAD_DIR" ${AWS_REGION:+--region "$AWS_REGION"} --only-show-errors
         RESTORE_DIR="$DOWNLOAD_DIR"
       fi
     fi
-    "$SCRIPT_DIR/restore.sh" "$RESTORE_DIR"
+    CONFIG_FILE="$CONFIG_FILE" "$SCRIPT_DIR/restore.sh" "$RESTORE_DIR"
     [[ -n "${DOWNLOAD_DIR:-}" ]] && rm -rf "$DOWNLOAD_DIR"
     ;;
   full)
