@@ -81,19 +81,24 @@ fi
 
 echo "[$(date -Iseconds)] Backup complete: $OUT_DIR"
 
-# Push to S3 if configured: bucket / YYYYMMDD / folder / db_timestamp.tar.gz (folder defaults to "upt")
+# Push to S3 if configured: bucket / YYYYMMDD / folder / db_YYYYMMDD.tar.gz (one per day per DB; new backup overwrites existing)
 if [[ -n "${S3_BUCKET:-}" ]]; then
   if ! command -v aws &>/dev/null; then
     echo "Warning: aws CLI not found; skipping S3 upload."
   else
     DATE_PREFIX=$(date +%Y%m%d)
     S3_FOLDER="${S3_PREFIX:-upt}"
-    ARCHIVE_NAME="${SOURCE_DATABASE:-db}_${STAMP}.tar.gz"
-    # Path: s3://bucket/YYYYMMDD/upt/db_timestamp.tar.gz (all DB backups under date/upt/)
+    ARCHIVE_NAME="${SOURCE_DATABASE:-db}_${DATE_PREFIX}.tar.gz"
+    # Path: s3://bucket/YYYYMMDD/upt/db_YYYYMMDD.tar.gz (replaces existing same-day backup)
     S3_URI="s3://${S3_BUCKET}/${DATE_PREFIX}/${S3_FOLDER}/${ARCHIVE_NAME}"
     echo "[$(date -Iseconds)] Creating and uploading $ARCHIVE_NAME to $S3_URI ..."
     tar -czf - -C "$BACKUP_DIR" "$(basename "$OUT_DIR")" | aws s3 cp - "$S3_URI" ${AWS_REGION:+--region "$AWS_REGION"} --only-show-errors
     echo "[$(date -Iseconds)] S3 upload complete. S3_PATH=$S3_URI"
+    echo "S3_UPLOADED=1"
+    if [[ "${CLEAN_AFTER_S3_UPLOAD:-1}" == 1 ]]; then
+      rm -rf "$OUT_DIR"
+      echo "[$(date -Iseconds)] Removed local backup dir (uploaded to S3): $OUT_DIR"
+    fi
   fi
 fi
 

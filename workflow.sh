@@ -73,8 +73,9 @@ case "$MODE" in
   full)
     echo "=== Full: backup -> [transfer] -> restore ==="
     START=$(date +%s)
-    "$SCRIPT_DIR/backup.sh" | tee /tmp/backup_output.$$.txt
+    CLEAN_AFTER_S3_UPLOAD=0 "$SCRIPT_DIR/backup.sh" | tee /tmp/backup_output.$$.txt
     BACKUP_PATH=$(grep '^BACKUP_PATH=' /tmp/backup_output.$$.txt | cut -d= -f2)
+    S3_UPLOADED=$(grep '^S3_UPLOADED=1' /tmp/backup_output.$$.txt 2>/dev/null) || true
     rm -f /tmp/backup_output.$$.txt
     if [[ -z "$BACKUP_PATH" ]]; then
       echo "Could not determine BACKUP_PATH from backup script."
@@ -86,8 +87,10 @@ case "$MODE" in
       END=$(date +%s)
       echo "=== Backup + transfer time: $(( (END - START) / 60 )) minutes ==="
       echo "On target host run: ./workflow.sh restore-only $REMOTE_BACKUP_PATH"
+      [[ -n "$S3_UPLOADED" ]] && rm -rf "$BACKUP_PATH" && echo "[$(date -Iseconds)] Removed local backup dir (uploaded to S3): $BACKUP_PATH"
     else
       "$SCRIPT_DIR/restore.sh" "$BACKUP_PATH"
+      [[ -n "$S3_UPLOADED" ]] && rm -rf "$BACKUP_PATH" && echo "[$(date -Iseconds)] Removed local backup dir (uploaded to S3): $BACKUP_PATH"
       END=$(date +%s)
       echo "=== Total time: $(( (END - START) / 60 )) minutes ==="
     fi
