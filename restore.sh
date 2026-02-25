@@ -17,10 +17,22 @@ else
   exit 1
 fi
 
+source "$SCRIPT_DIR/notify-teams.sh" 2>/dev/null || true
+
 PARALLEL_JOBS="${PARALLEL_JOBS:-16}"
 # Use RESTORE_THREADS for myloader if set (e.g. 1 or 2 to avoid Trace/breakpoint trap crash)
 RESTORE_THREADS="${RESTORE_THREADS:-$PARALLEL_JOBS}"
 RESTORE_DIR="${1:-}"
+
+_restore_failed() {
+  local rc=$?
+  if type notify_teams &>/dev/null && [[ -n "${TEAMS_WEBHOOK_URL:-}" ]]; then
+    notify_teams "MySQL restore failed" "Target: ${TARGET_DATABASE:-unknown} on ${TARGET_HOST:-}
+Restore path: ${RESTORE_DIR:-}
+Exit code: $rc" failure
+  fi
+}
+trap _restore_failed ERR
 
 if [[ -z "$RESTORE_DIR" || ! -d "$RESTORE_DIR" ]]; then
   echo "Usage: $0 <backup_directory>"
@@ -74,3 +86,10 @@ else
 fi
 
 echo "[$(date -Iseconds)] Restore complete: $TARGET_DATABASE"
+
+# Notify Teams if webhook configured
+if type notify_teams &>/dev/null && [[ -n "${TEAMS_WEBHOOK_URL:-}" ]]; then
+  notify_teams "MySQL restore completed" "Target database: $TARGET_DATABASE
+Host: $TARGET_HOST
+Source: $RESTORE_DIR" success
+fi

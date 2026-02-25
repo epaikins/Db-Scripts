@@ -1,7 +1,7 @@
 # MySQL fast backup/restore (50GB+) - Makefile
 SHELL := /bin/bash
 
-.PHONY: help config backup restore full backup-xtra restore-xtra backup-all cron-backup clean check
+.PHONY: help config backup restore full backup-xtra restore-xtra backup-all cron-backup clean check install-cron-service
 
 help:
 	@echo "MySQL backup/restore workflow (50GB+, sub-1hr target)"
@@ -12,6 +12,7 @@ help:
 	@echo "  make full            - Backup then restore (or backup + rsync if REMOTE_BACKUP_PATH set)"
 	@echo "  make backup-all      - Backup all DBs in configs/*.env and push to S3 (for cron)"
 	@echo "  make cron-backup    - Same as backup-all; use in cron at midnight"
+	@echo "  make install-cron-service - Install systemd service+timer for daily backups (Linux)"
 	@echo "  make backup-xtra    - Physical backup via Percona XtraBackup"
 	@echo "  make restore-xtra    - Restore from XtraBackup (use: make restore-xtra BACKUP_PATH=./backups/xtra_*)"
 	@echo "  make check           - Verify config.env exists and tools (mydumper/myloader) available"
@@ -37,6 +38,9 @@ full: check
 
 backup-all cron-backup:
 	./cron-backup-all.sh
+
+install-cron-service:
+	./install-cron-backup-service.sh
 
 backup-xtra: check
 	./backup-xtrabackup.sh

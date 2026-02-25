@@ -19,11 +19,23 @@ else
   exit 1
 fi
 
+source "$SCRIPT_DIR/notify-teams.sh" 2>/dev/null || true
+
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
 PARALLEL_JOBS="${PARALLEL_JOBS:-16}"
 COMPRESS="${COMPRESS:-1}"
 CHUNK_SIZE_MB="${CHUNK_SIZE_MB:-64}"
 BACKUP_TOOL="${BACKUP_TOOL:-mydumper}"
+
+_backup_failed() {
+  local rc=$?
+  if type notify_teams &>/dev/null && [[ -n "${TEAMS_WEBHOOK_URL:-}" ]]; then
+    notify_teams "MySQL backup failed" "Database: ${SOURCE_DATABASE:-unknown}
+Config: ${CONFIG_FILE:-}
+Exit code: $rc" failure
+  fi
+}
+trap _backup_failed ERR
 
 STAMP=$(date +%Y%m%d_%H%M%S)
 OUT_DIR="${BACKUP_DIR}/${SOURCE_DATABASE:-db}_${STAMP}"
@@ -83,6 +95,15 @@ if [[ -n "${S3_BUCKET:-}" ]]; then
     tar -czf - -C "$BACKUP_DIR" "$(basename "$OUT_DIR")" | aws s3 cp - "$S3_URI" ${AWS_REGION:+--region "$AWS_REGION"} --only-show-errors
     echo "[$(date -Iseconds)] S3 upload complete. S3_PATH=$S3_URI"
   fi
+fi
+
+# Notify Teams if webhook configured
+if type notify_teams &>/dev/null && [[ -n "${TEAMS_WEBHOOK_URL:-}" ]]; then
+  BODY="Database: $SOURCE_DATABASE
+Path: $OUT_DIR"
+  [[ -n "${S3_URI:-}" ]] && BODY="$BODY
+S3: $S3_URI"
+  notify_teams "MySQL backup completed" "$BODY" success
 fi
 
 echo "BACKUP_PATH=$OUT_DIR"

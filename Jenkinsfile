@@ -75,6 +75,7 @@ pipeline {
           withCredentials(creds) {
             def sourcePass = params.SOURCE_CREDENTIAL_ID?.trim() ? (env.SOURCE_PASS ?: '') : ''
             def targetPass = params.TARGET_CREDENTIAL_ID?.trim() ? (env.TARGET_PASS ?: '') : ''
+                        def restorePath = (params.MODE == 'restore-only' && params.RESTORE_PATH?.trim()) ? params.RESTORE_PATH.trim() : ''
             writeFile file: 'config.env', text: """\
 SOURCE_HOST=${params.SOURCE_HOST}
 SOURCE_PORT=${params.SOURCE_PORT}
@@ -87,6 +88,7 @@ TARGET_USER=${params.TARGET_USER}
 TARGET_PASSWORD=${targetPass}
 TARGET_DATABASE=${params.TARGET_DATABASE}
 BACKUP_DIR=${params.BACKUP_DIR}
+RESTORE_PATH=${restorePath}
 REMOTE_BACKUP_PATH=${params.REMOTE_BACKUP_PATH}
 S3_BUCKET=${params.S3_BUCKET}
 S3_PREFIX=${params.S3_PREFIX}
@@ -107,14 +109,14 @@ BACKUP_TOOL=${params.BACKUP_TOOL}
         script {
           def cmd = "./workflow.sh ${params.MODE}"
           if (params.MODE == 'restore-only') {
-            if (!params.BACKUP_PATH?.trim()) {
-              error "restore-only requires BACKUP_PATH parameter (local path or s3://bucket/prefix/key)"
+            if (!params.RESTORE_PATH?.trim()) {
+              error "restore-only requires RESTORE_PATH parameter (local path or s3://bucket/prefix/key)"
             }
-            cmd += " '${params.BACKUP_PATH.trim().replace("'", "'\\''")}'"
+            cmd += " config.env"
           }
           def useAws = params.AWS_CREDENTIAL_ID?.trim() && (
             params.S3_BUCKET?.trim() ||
-            (params.MODE == 'restore-only' && params.BACKUP_PATH?.trim()?.startsWith('s3://'))
+            (params.MODE == 'restore-only' && params.RESTORE_PATH?.trim()?.startsWith('s3://'))
           )
           if (useAws) {
             withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: params.AWS_CREDENTIAL_ID.trim()]]) {

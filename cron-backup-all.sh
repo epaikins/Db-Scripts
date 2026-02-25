@@ -8,6 +8,13 @@ cd "$SCRIPT_DIR"
 CONFIGS_DIR="${CONFIGS_DIR:-$SCRIPT_DIR/configs}"
 LOG_TAG="cron-backup-all"
 
+# Load TEAMS_WEBHOOK_URL for summary notification (from config.env or first config)
+source "$SCRIPT_DIR/load-config.sh"
+if [[ -f "$SCRIPT_DIR/config.env" ]]; then
+  load_config_env "$SCRIPT_DIR/config.env"
+fi
+source "$SCRIPT_DIR/notify-teams.sh" 2>/dev/null || true
+
 if [[ ! -d "$CONFIGS_DIR" ]]; then
   echo "[$LOG_TAG] [$CONFIGS_DIR] Configs directory missing. Create configs/ and add <name>.env per server/DB." 1>&2
   exit 1
@@ -18,6 +25,10 @@ CONFIGS=( "$CONFIGS_DIR"/*.env )
 if [[ ${#CONFIGS[@]} -eq 0 ]]; then
   echo "[$LOG_TAG] No configs found in $CONFIGS_DIR (expected *.env). Copy configs/example-server.env.example to configs/<name>.env" 1>&2
   exit 1
+fi
+# If webhook still unset, try first config (for cron summary)
+if [[ -z "${TEAMS_WEBHOOK_URL:-}" ]] && [[ -f "${CONFIGS[0]:-}" ]]; then
+  load_config_env "${CONFIGS[0]}"
 fi
 
 echo "[$LOG_TAG] [$(date -Iseconds)] Starting backups for ${#CONFIGS[@]} config(s)"
@@ -37,5 +48,12 @@ done
 echo "[$LOG_TAG] [$(date -Iseconds)] Finished. Total: ${#CONFIGS[@]}, Failed: ${#FAILED[@]}"
 if [[ ${#FAILED[@]} -gt 0 ]]; then
   echo "[$LOG_TAG] Failed configs: ${FAILED[*]}" 1>&2
+  if type notify_teams &>/dev/null && [[ -n "${TEAMS_WEBHOOK_URL:-}" ]]; then
+    notify_teams "MySQL cron backup run finished (with failures)" "Total: ${#CONFIGS[@]}, Failed: ${#FAILED[@]}
+Failed configs: ${FAILED[*]}" failure
+  fi
   exit 1
+fi
+if type notify_teams &>/dev/null && [[ -n "${TEAMS_WEBHOOK_URL:-}" ]]; then
+  notify_teams "MySQL cron backup run completed" "All ${#CONFIGS[@]} database backup(s) completed successfully." success
 fi

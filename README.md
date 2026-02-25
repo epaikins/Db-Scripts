@@ -108,6 +108,23 @@ Backups are stored as **bucket/YYYYMMDD/folder/db_timestamp.tar.gz**. The folder
   make restore CONFIG=config.env
   ```
 
+## Teams notifications
+
+You can post backup and restore completion messages to a **Microsoft Teams** channel using an Incoming Webhook.
+
+1. **Create a webhook** in Teams: open the channel → Connectors (or channel name → Manage channel) → Incoming Webhook → Add, name it (e.g. "DB backups"), copy the URL.
+2. **Set the URL** in your config:
+   ```bash
+   TEAMS_WEBHOOK_URL=https://outlook.office.com/webhook/...
+   ```
+   Put it in `config.env` for single-DB backup/restore and for the **cron summary** (when using `cron-backup-all.sh`). For per-DB notifications when running cron, you can also set it in each `configs/<name>.env`.
+3. **What gets sent**:
+   - **Backup done**: after each successful backup (database name, path, S3 URI if used); and on backup failure.
+   - **Restore done**: after each successful restore (target DB, host, source path); and on restore failure.
+   - **Cron run summary**: when `cron-backup-all.sh` finishes—either “All N backup(s) completed successfully” or “N failed” with the list of failed configs.
+
+If `TEAMS_WEBHOOK_URL` is unset or not `https://`, notifications are skipped. Requires `curl` or `wget` and `python3` for JSON encoding.
+
 ## Optional: transfer backup to target host
 
 In `config.env` set:
@@ -152,6 +169,17 @@ To run a backup every night for **multiple databases on different servers** and 
    This runs `backup.sh` once per `configs/*.env`; each backup is uploaded to `s3://<bucket>/YYYYMMDD/upt/<db>_<timestamp>.tar.gz`.
 
 4. **Schedule at midnight** (e.g. on the machine that can reach all MySQL servers and S3):
+
+   **Option A – systemd service (recommended)**  
+   Install a systemd timer that runs the backup daily at midnight:
+   ```bash
+   ./install-cron-backup-service.sh              # system-wide (uses sudo)
+   # or for your user only (no sudo):
+   ./install-cron-backup-service.sh --user
+   ```
+   Logs go to `/var/log/mysql-cron-backup.log` (system) or `./logs/cron-backup.log` (user). Use `--dry-run` to print the units without installing; `--skip-enable` to install but not enable/start the timer.
+
+   **Option B – cron**  
    ```bash
    crontab -e
    ```
@@ -178,6 +206,8 @@ db-scripts/
 ├── restore.sh           # restore (myloader or mysql)
 ├── workflow.sh          # full | backup-only | restore-only
 ├── cron-backup-all.sh   # run backup for every configs/*.env, push to S3
+├── install-cron-backup-service.sh  # install systemd service + timer for daily backups
+├── notify-teams.sh      # send backup/restore completion to Teams channel (optional)
 ├── backup-xtrabackup.sh # optional physical backup
 ├── restore-xtrabackup.sh
 ├── Jenkinsfile          # Jenkins pipeline
